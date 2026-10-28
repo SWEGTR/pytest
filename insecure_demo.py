@@ -1,4 +1,5 @@
-import hashlib
+Simport hashlib
+import re
 import os
 import secrets
 import sqlite3
@@ -16,9 +17,11 @@ def get_user(username):
     return conn.execute("SELECT * FROM users WHERE name = ?", (username,)).fetchall()
 
 def ping(host):
-    # Без shell=True, аргументы списком (защита от командной инъекции)
-    return subprocess.run(["ping", "-c", "1", host], check=False)
+    # Валидация: разрешаем только буквы, цифры, точки и дефисы (IP или домен)
+    if not re.match(r"^[a-zA-Z0-9.-]+$", host):
+        raise ValueError("Invalid host format")
 
+    return subprocess.run(["ping", "-c", "1", host], check=False)
 def hash_password(password, salt=None):
     # Криптостойкий scrypt вместо MD5
     salt = salt or os.urandom(16)
