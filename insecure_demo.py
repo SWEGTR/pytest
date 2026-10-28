@@ -1,33 +1,42 @@
 import hashlib
-import pickle
-import random
+import os
+import secrets
 import sqlite3
 import subprocess
-
+import json
 import requests
 import yaml
 
-DB_PASSWORD = "SuperSecret123!" # пароль в коде
+# Секрет берется из переменной окружения, а не пишется в коде
+DB_PASSWORD = os.environ.get("DB_PASSWORD", "default_pass")
 
 def get_user(username):
     conn = sqlite3.connect("app.db")
-    query = f"SELECT * FROM users WHERE name = '{username}'" # SQL-инъекция
-    return conn.execute(query).fetchall()
+    # Параметризованный запрос (защита от SQL-инъекции)
+    return conn.execute("SELECT * FROM users WHERE name = ?", (username,)).fetchall()
 
 def ping(host):
-    return subprocess.run("ping -c 1 " + host, shell=True) # командная инъекция
+    # Без shell=True, аргументы списком (защита от командной инъекции)
+    return subprocess.run(["ping", "-c", "1", host], check=False)
 
-def hash_password(password):
-    return hashlib.md5(password.encode()).hexdigest() # слабый хеш
+def hash_password(password, salt=None):
+    # Криптостойкий scrypt вместо MD5
+    salt = salt or os.urandom(16)
+    digest = hashlib.scrypt(password.encode(), salt=salt, n=2**14, r=8, p=1)
+    return salt, digest
 
 def make_reset_token():
-    return str(random.random()) # предсказуемый токен
+    # Криптостойкий генератор токенов вместо random
+    return secrets.token_urlsafe(32)
 
 def load_config(text):
-    return yaml.load(text, Loader=yaml.Loader) # небезопасная загрузка YAML
+    # Безопасная загрузка YAML
+    return yaml.safe_load(text)
 
 def load_session(data):
-    return pickle.loads(data) # небезопасная десериализация
+    # Замена pickle на json для безопасной десериализации
+    return json.loads(data)
 
 def fetch(url):
-    return requests.get(url, verify=False) # отключена проверка TLS
+    # Включена проверка TLS (удален verify=False), добавлен таймаут
+    return requests.get(url, timeout=10)
